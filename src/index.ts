@@ -1,7 +1,69 @@
-import { Elysia } from "elysia";
+import { eq } from "drizzle-orm";
+import { Elysia, t } from "elysia";
+import { customAlphabet } from "nanoid";
+import { db } from "./db";
+import { shortUrls } from "./schema";
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
+const base62Alphabet =
+	"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+const nanoid = customAlphabet(base62Alphabet, 8);
+
+export const app = new Elysia()
+	.get(
+		"/",
+		() =>
+			'Usage: POST method with "longUrl" in body field, or GET method with short URL ID as a GET param',
+	)
+	.post(
+		"/",
+		async ({ body: { longUrl }, set }) => {
+			try {
+				const newShortUrl = await db
+					.insert(shortUrls)
+					.values({ id: nanoid(8), longUrl })
+					.returning();
+				set.status = 201;
+				return newShortUrl[0];
+			} catch (_) {
+				set.status = 400;
+				return { error: "Short URL already exists or invalid data" };
+			}
+		},
+		{
+			body: t.Object({
+				longUrl: t.String({
+					format: "uri",
+					minLength: 1,
+				}),
+			}),
+		},
+	)
+	.get(
+		"/:id",
+		async ({ params: { id }, set, redirect }) => {
+			const longUrl = await db
+				.select({ longUrl: shortUrls.longUrl })
+				.from(shortUrls)
+				.where(eq(shortUrls.id, id));
+			if (longUrl.length === 0) {
+				set.status = 404;
+				return { error: "Invalid short URL" };
+			}
+			return redirect(longUrl[0].longUrl, 301);
+		},
+		{
+			params: t.Object({
+				id: t.String(),
+			}),
+		},
+	)
+	.listen(3000);
 
 console.log(
 	`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
 );
+// Use SQLite for DB and marking how often a URL was hit
+// Adding indexing for the column that has the short URL
+// Don't forget to add rate limiting for the API
+// Always check if the short URL already exists in the DB before trying to save
