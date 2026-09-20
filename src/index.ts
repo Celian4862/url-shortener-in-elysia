@@ -35,6 +35,7 @@ export const app = new Elysia()
 				longUrl: t.String({
 					format: "uri",
 					minLength: 1,
+					maxLength: 2048,
 				}),
 			}),
 		},
@@ -43,13 +44,17 @@ export const app = new Elysia()
 		"/:id",
 		async ({ params: { id }, set, redirect }) => {
 			const longUrl = await db
-				.select({ longUrl: shortUrls.longUrl })
+				.select({ longUrl: shortUrls.longUrl, hits: shortUrls.hits })
 				.from(shortUrls)
 				.where(eq(shortUrls.id, id));
 			if (longUrl.length === 0) {
 				set.status = 404;
 				return { error: "Invalid short URL" };
 			}
+			await db
+				.update(shortUrls)
+				.set({ hits: longUrl[0].hits + 1 })
+				.where(eq(shortUrls.id, id));
 			return redirect(longUrl[0].longUrl, 301);
 		},
 		{

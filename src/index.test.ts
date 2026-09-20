@@ -1,7 +1,22 @@
-import { describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it } from "bun:test";
 import { app } from "./index";
 
 const domain = "http://localhost/";
+const sampleLongUrl = "http://neverssl.com/";
+
+function postJson(path: string, longUrl: string) {
+	return app.handle(
+		new Request(`${domain}${path}`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				longUrl: longUrl,
+			}),
+		}),
+	);
+}
 
 describe("Elysia", () => {
 	it("is running", async () => {
@@ -22,66 +37,48 @@ describe("GET root", () => {
 	});
 });
 
-describe("POST longUrl to shorten", () => {
-	it("returns a short URL", async () => {
-		const response = await app
-			.handle(
-				new Request(domain, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						longUrl: "http://neverssl.com/",
-					}),
-				}),
-			)
-			.then((res) => res.json());
-		expect(response).not.toBeNull();
-	});
-	describe("give invalid input", () => {
-		it("detects empty long URL", async () => {
-			const response = await app.handle(
-				new Request(domain, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						longUrl: "",
-					}),
-				}),
-			);
-			expect(response.status).toBe(400);
-		});
-		it("detects invalid domain", async () => {
-			const response = await app.handle(
-				new Request(domain, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						longUrl: "not-a-real-url",
-					}),
-				}),
-			);
-			expect(response.status).toBe(400);
-		});
-	});
-});
+describe("POST long URL to shorten & subsequent GET short URL", () => {
+	let longUrl: string;
+	let shortUrl: string;
 
-describe("GET short URL", () => {
-	it("redirects to the long URL", async () => {
-		expect(
-			await app.handle(new Request(`${domain}`)).then((res) => res.text()),
-		);
+	beforeAll(async () => {
+		const response = await postJson("", sampleLongUrl);
+		expect(response.status).toBe(201);
+
+		const data = (await response.json()) as {
+			longUrl: string;
+			id: string;
+			hits: number;
+		};
+		shortUrl = data.id;
+		longUrl = data.longUrl;
+		expect(shortUrl).not.toBeFalsy();
+		expect(longUrl).not.toBeFalsy();
 	});
-	it("returns an error (invalid short URL)", async () => {
-		expect(
-			await app
-				.handle(new Request(`${domain}pretty-sure-this-is-invalid`))
-				.then((res) => res.json()),
-		).toEqual({ error: "Invalid short URL" });
+
+	describe("POST long URL to shorten (Validation Tests)", () => {
+		it.each([
+			["empty long URL", ""],
+			["invalid domain", "not-a-real-url"],
+			["input that is too long", sampleLongUrl.repeat(3000)],
+		])("detects %s", async (_, invalidUrl) => {
+			const response = await postJson("", invalidUrl);
+			expect(response.status).toBe(422);
+		});
+	});
+
+	describe("GET short URL", () => {
+		it("redirects to the long URL", async () => {
+			const response = await app.handle(new Request(`${domain}${shortUrl}`));
+			expect(response.status).toBe(301);
+			expect(response.headers.get("Location")).toBe(longUrl);
+		});
+		it("returns an error (invalid short URL)", async () => {
+			expect(
+				await app
+					.handle(new Request(`${domain}pretty-sure-this-is-invalid`))
+					.then((res) => res.json()),
+			).toEqual({ error: "Invalid short URL" });
+		});
 	});
 });
