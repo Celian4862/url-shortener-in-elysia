@@ -33,7 +33,7 @@ export const app = new Elysia()
 		{
 			body: t.Object({
 				longUrl: t.String({
-					format: "uri",
+					format: "url",
 					minLength: 1,
 					maxLength: 2048,
 				}),
