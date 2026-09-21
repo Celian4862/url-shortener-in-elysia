@@ -1,21 +1,21 @@
 {
-  "name": "url-shortener-in-elysia",
-  "version": "1.0.50",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
-  },
-  "dependencies": {
-    "drizzle-orm": "^0.45.2",
-    "elysia": "latest",
-    "nanoid": "^6.0.1"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
-    "@types/better-sqlite3": "^9.6.0",
-    "better-sqlite3": "^13.0.3",
-    "bun-types": "latest",
-    "drizzle-kit": "^0.31.10"
-  },
-  "module": "src/index.js"
+	"name": "url-shortener-in-elysia",
+	"version": "1.0.50",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"dev": "bun run --watch src/index.ts"
+	},
+	"dependencies": {
+		"drizzle-orm": "^0.45.2",
+		"elysia": "latest",
+		"nanoid": "^6.0.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.14",
+		"@types/better-sqlite3": "^9.6.0",
+		"better-sqlite3": "^13.0.3",
+		"bun-types": "latest",
+		"drizzle-kit": "^0.31.10"
+	},
+	"module": "src/index.js"
 }
