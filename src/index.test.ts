@@ -68,6 +68,18 @@ describe("POST long URL to shorten & subsequent GET short URL", () => {
 			const response = await postJson("", invalidUrl);
 			expect(response.status).toBe(422);
 		});
+		it("detects missing longUrl body field", async () => {
+			const response = await app.handle(
+				new Request(domain, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({}),
+				}),
+			);
+			expect(response.status).toBe(422);
+		});
 	});
 
 	describe("GET short URL", () => {
@@ -75,6 +87,11 @@ describe("POST long URL to shorten & subsequent GET short URL", () => {
 			const response = await app.handle(new Request(`${domain}${shortUrl}`));
 			expect(response.status).toBe(301);
 			expect(response.headers.get("Location")).toBe(longUrl);
+			const updatedUrl = await db
+				.select({ hits: shortUrls.hits })
+				.from(shortUrls)
+				.where(eq(shortUrls.id, shortUrl));
+			expect(updatedUrl[0].hits).toBeGreaterThan(0);
 		});
 		it("returns an error (invalid short URL)", async () => {
 			expect(
@@ -90,6 +107,10 @@ describe("POST long URL to shorten & subsequent GET short URL", () => {
 
 			const response = await app.handle(new Request(`${domain}${shortUrl}`));
 			expect(response.status).toBe(429);
+			const errorJson = await response.json();
+			expect(errorJson).toEqual({
+				error: "Too many requests, please try again later.",
+			});
 		});
 	});
 
