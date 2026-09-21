@@ -1,5 +1,8 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
 import { app } from "./index";
+import { shortUrls } from "./schema";
 
 const domain = "http://localhost/";
 const sampleLongUrl = "http://neverssl.com/";
@@ -81,4 +84,8 @@ describe("POST long URL to shorten & subsequent GET short URL", () => {
 			).toEqual({ error: "Invalid short URL" });
 		});
 	});
+
+	afterAll(
+		async () => await db.delete(shortUrls).where(eq(shortUrls.id, shortUrl)),
+	);
 });
