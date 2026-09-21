@@ -1,5 +1,6 @@
 {
 	"name": "url-shortener-in-elysia",
+	"type": "module",
 	"version": "1.0.50",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
@@ -8,6 +9,7 @@
 	"dependencies": {
 		"drizzle-orm": "^0.45.2",
 		"elysia": "latest",
+		"ioredis": "^6.0.0",
 		"nanoid": "^6.0.1"
 	},
 	"devDependencies": {
