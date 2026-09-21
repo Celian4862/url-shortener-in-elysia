@@ -1,13 +1,15 @@
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { customAlphabet } from "nanoid";
 import { db } from "./db";
 import { shortUrls } from "./schema";
 
 const base62Alphabet =
 	"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-const nanoid = customAlphabet(base62Alphabet, 8);
+const nanoid = async () => {
+	const { customAlphabet } = await import("nanoid");
+	return customAlphabet(base62Alphabet, 8)();
+};
 
 export const app = new Elysia()
 	.get(
@@ -21,7 +23,7 @@ export const app = new Elysia()
 			try {
 				const newShortUrl = await db
 					.insert(shortUrls)
-					.values({ id: nanoid(8), longUrl })
+					.values({ id: await nanoid(), longUrl })
 					.returning();
 				set.status = 201;
 				return newShortUrl[0];
