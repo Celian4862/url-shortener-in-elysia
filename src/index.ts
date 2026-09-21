@@ -1,3 +1,4 @@
+import { openapi } from "@elysia/openapi";
 import { eq, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { Redis } from "ioredis";
@@ -15,6 +16,7 @@ const nanoid = () => {
 const redis = new Redis(); // Probably port 6379
 
 export const app = new Elysia()
+	.use(openapi())
 	.onBeforeHandle(async ({ request, set }) => {
 		const clientIp = request.headers.get("x-forwarded-for") ?? "local";
 		const windowKey = Math.floor(Date.now() / 60_000); // changes every minute
