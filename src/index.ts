@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { Redis } from "ioredis";
 import { customAlphabet } from "nanoid";
@@ -42,6 +42,9 @@ export const app = new Elysia()
 					.insert(shortUrls)
 					.values({ id: await nanoid(), longUrl })
 					.returning();
+
+				await redis.set(`url:${newShortUrl[0].id}`, longUrl);
+
 				set.status = 201;
 				return newShortUrl[0];
 			} catch (_) {
@@ -62,19 +65,30 @@ export const app = new Elysia()
 	.get(
 		"/:id",
 		async ({ params: { id }, set, redirect }) => {
-			const longUrl = await db
-				.select({ longUrl: shortUrls.longUrl, hits: shortUrls.hits })
-				.from(shortUrls)
-				.where(eq(shortUrls.id, id));
-			if (longUrl.length === 0) {
-				set.status = 404;
-				return { error: "Invalid short URL" };
+			let targetUrl: string | null = null;
+
+			const cachedUrl = await redis.get(`url:${id}`);
+
+			if (cachedUrl) {
+				targetUrl = cachedUrl;
+			} else {
+				const longUrl = await db
+					.select({ longUrl: shortUrls.longUrl, hits: shortUrls.hits })
+					.from(shortUrls)
+					.where(eq(shortUrls.id, id));
+				if (longUrl.length === 0) {
+					set.status = 404;
+					return { error: "Invalid short URL" };
+				}
+				targetUrl = longUrl[0].longUrl;
+
+				await redis.set(`url:${id}`, targetUrl);
 			}
-			await db
-				.update(shortUrls)
-				.set({ hits: longUrl[0].hits + 1 })
-				.where(eq(shortUrls.id, id));
-			return redirect(longUrl[0].longUrl, 301);
+			db.update(shortUrls)
+				.set({ hits: sql`hits + 1` })
+				.where(eq(shortUrls.id, id))
+				.catch((err) => console.error("Failed to update hit count:", err));
+			return redirect(targetUrl, 301);
 		},
 		{
 			params: t.Object({
