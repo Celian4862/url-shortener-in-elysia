@@ -83,6 +83,14 @@ describe("POST long URL to shorten & subsequent GET short URL", () => {
 					.then((res) => res.json()),
 			).toEqual({ error: "Invalid short URL" });
 		});
+		it("rate limits", async () => {
+			for (let i = 0; i < 10; i++) {
+				await app.handle(new Request(`${domain}${shortUrl}`));
+			}
+
+			const response = await app.handle(new Request(`${domain}${shortUrl}`));
+			expect(response.status).toBe(429);
+		});
 	});
 
 	afterAll(
