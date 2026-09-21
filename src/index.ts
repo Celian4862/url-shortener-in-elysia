@@ -1,17 +1,34 @@
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { Redis } from "ioredis";
+import { customAlphabet } from "nanoid";
 import { db } from "./db";
 import { shortUrls } from "./schema";
 
 const base62Alphabet =
 	"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-const nanoid = async () => {
-	const { customAlphabet } = await import("nanoid");
+const nanoid = () => {
 	return customAlphabet(base62Alphabet, 8)();
 };
 
+const redis = new Redis(); // Probably port 6379
+
 export const app = new Elysia()
+	.onBeforeHandle(async ({ request, set }) => {
+		const clientIp = request.headers.get("x-forwarded-for") ?? "local";
+		const windowKey = Math.floor(Date.now() / 60_000); // changes every minute
+		const redisKey = `ratelimit:${clientIp}:${windowKey}`;
+
+		// Increment count and set a 60-second expiration atomically
+		const requests = await redis.incr(redisKey);
+		if (requests === 1) {
+			await redis.expire(redisKey, 60);
+		} else if (requests > 10) {
+			set.status = 429;
+			return { error: "Too many requests, please try again later." };
+		}
+	})
 	.get(
 		"/",
 		() =>
@@ -64,13 +81,12 @@ export const app = new Elysia()
 				id: t.String(),
 			}),
 		},
-	)
-	.listen(3000);
+	);
 
-console.log(
-	`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
-);
-// Use SQLite for DB and marking how often a URL was hit
-// Adding indexing for the column that has the short URL
-// Don't forget to add rate limiting for the API
-// Always check if the short URL already exists in the DB before trying to save
+if (import.meta.main) {
+	app.listen(3000);
+
+	console.log(
+		`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
+	);
+}
