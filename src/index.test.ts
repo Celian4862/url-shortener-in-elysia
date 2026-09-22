@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { app } from "./index";
+import app from "./index";
 import { shortUrls } from "./schema";
 
 const domain = "http://localhost/";
