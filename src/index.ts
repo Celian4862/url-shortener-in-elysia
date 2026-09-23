@@ -31,16 +31,17 @@ const threeWeeksAgo = () => Math.floor(Date.now() / 1000) - 1814400; // 21 days/
 
 const app = new Elysia()
 	.use(openapi())
-	// .onAfterResponse(async () => {
-	// try {
-	// Delete any old short URLs whenever a client sends a request to the server
-	// await db.delete(shortUrls).where(lt(shortUrls.createdAt, threeWeeksAgo()));
-	// } catch (err) {
-	// 	console.error("Non-blocking cleanup failed:", err);
-	// }
-	// })
+	.onAfterResponse(async () => {
+		try {
+			// Delete any old short URLs whenever a client sends a request to the server
+			await db
+				.delete(shortUrls)
+				.where(lt(shortUrls.createdAt, threeWeeksAgo()));
+		} catch (err) {
+			console.error("Non-blocking cleanup failed:", err);
+		}
+	})
 	.onBeforeHandle(async ({ request, set }) => {
-		await db.delete(shortUrls).where(lt(shortUrls.createdAt, threeWeeksAgo()));
 		try {
 			const clientIp = request.headers.get("x-forwarded-for") ?? "local";
 			const windowKey = Math.floor(Date.now() / 60_000); // changes every minute
