@@ -13,7 +13,18 @@ const nanoid = () => {
 	return customAlphabet(base62Alphabet, 8)();
 };
 
-const redis = new Redis(); // Probably port 6379
+const redis = new Redis(
+	(() => {
+		const redisUrl = process.env.REDIS_URL;
+
+		if (!redisUrl) {
+			throw new Error(
+				"❌ REDIS_URL or KV_URL is missing from your environment variables. Please check your Vercel integration settings.",
+			);
+		}
+		return redisUrl;
+	})(),
+); // Probably port 6379
 
 const app = new Elysia()
 	.use(openapi())
