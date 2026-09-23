@@ -1,5 +1,5 @@
 import { openapi } from "@elysia/openapi";
-import { eq, sql } from "drizzle-orm";
+import { eq, lt, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { Redis } from "ioredis";
 import { customAlphabet } from "nanoid";
@@ -26,9 +26,15 @@ const redis = new Redis(
 	})(),
 ); // Probably port 6379
 
+// For cleaning up old short URLs
+const threeWeeksAgo = () => Math.floor(Date.now() / 1000) - 1814400; // 21 days/week * 24 hrs/day * 60 mins/hr * 60 secs/min
+
 const app = new Elysia()
 	.use(openapi())
 	.onBeforeHandle(async ({ request, set }) => {
+		// Delete any old short URLs whenever a client sends a request to the server
+		await db.delete(shortUrls).where(lt(shortUrls.createdAt, threeWeeksAgo()));
+
 		const clientIp = request.headers.get("x-forwarded-for") ?? "local";
 		const windowKey = Math.floor(Date.now() / 60_000); // changes every minute
 		const redisKey = `ratelimit:${clientIp}:${windowKey}`;
@@ -108,7 +114,22 @@ const app = new Elysia()
 				id: t.String(),
 			}),
 		},
-	);
+	)
+	.get("/cron/cleanup", async ({ headers, set }) => {
+		if (headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+			set.status = 401;
+			return { error: "Unauthorized" };
+		}
+
+		return {
+			success: true,
+			deleted: (
+				await db
+					.delete(shortUrls)
+					.where(lt(shortUrls.createdAt, threeWeeksAgo()))
+			).rowsAffected,
+		};
+	});
 
 if (import.meta.main) {
 	app.listen(3000);
