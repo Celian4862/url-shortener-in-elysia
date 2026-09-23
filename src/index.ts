@@ -31,21 +31,32 @@ const threeWeeksAgo = () => Math.floor(Date.now() / 1000) - 1814400; // 21 days/
 
 const app = new Elysia()
 	.use(openapi())
+	// .onAfterResponse(async () => {
+	// try {
+	// Delete any old short URLs whenever a client sends a request to the server
+	// await db.delete(shortUrls).where(lt(shortUrls.createdAt, threeWeeksAgo()));
+	// } catch (err) {
+	// 	console.error("Non-blocking cleanup failed:", err);
+	// }
+	// })
 	.onBeforeHandle(async ({ request, set }) => {
-		// Delete any old short URLs whenever a client sends a request to the server
 		await db.delete(shortUrls).where(lt(shortUrls.createdAt, threeWeeksAgo()));
+		try {
+			const clientIp = request.headers.get("x-forwarded-for") ?? "local";
+			const windowKey = Math.floor(Date.now() / 60_000); // changes every minute
+			const redisKey = `ratelimit:${clientIp}:${windowKey}`;
 
-		const clientIp = request.headers.get("x-forwarded-for") ?? "local";
-		const windowKey = Math.floor(Date.now() / 60_000); // changes every minute
-		const redisKey = `ratelimit:${clientIp}:${windowKey}`;
-
-		// Increment count and set a 60-second expiration atomically
-		const requests = await redis.incr(redisKey);
-		if (requests === 1) {
-			await redis.expire(redisKey, 60);
-		} else if (requests > 10) {
-			set.status = 429;
-			return { error: "Too many requests, please try again later." };
+			// Increment count and set a 60-second expiration atomically
+			const requests = await redis.incr(redisKey);
+			if (requests === 1) {
+				await redis.expire(redisKey, 60);
+			} else if (requests > 10) {
+				set.status = 429;
+				return { error: "Too many requests, please try again later." };
+			}
+		} catch (err) {
+			console.error("Redis rate-limiter failed, failing open:", err);
+			// If Redis is down, we allow the request to proceed instead of crashing
 		}
 	})
 	.get(
@@ -84,30 +95,36 @@ const app = new Elysia()
 	.get(
 		"/:id",
 		async ({ params: { id }, set, redirect }) => {
-			let targetUrl: string | null = null;
+			try {
+				let targetUrl: string | null = null;
 
-			const cachedUrl = await redis.get(`url:${id}`);
+				const cachedUrl = await redis.get(`url:${id}`);
 
-			if (cachedUrl) {
-				targetUrl = cachedUrl;
-			} else {
-				const longUrl = await db
-					.select({ longUrl: shortUrls.longUrl, hits: shortUrls.hits })
-					.from(shortUrls)
-					.where(eq(shortUrls.id, id));
-				if (longUrl.length === 0) {
-					set.status = 404;
-					return { error: "Invalid short URL" };
+				if (cachedUrl) {
+					targetUrl = cachedUrl;
+				} else {
+					const longUrl = await db
+						.select({ longUrl: shortUrls.longUrl, hits: shortUrls.hits })
+						.from(shortUrls)
+						.where(eq(shortUrls.id, id));
+					if (longUrl.length === 0) {
+						set.status = 404;
+						return { error: "Invalid short URL" };
+					}
+					targetUrl = longUrl[0].longUrl;
+
+					await redis.set(`url:${id}`, targetUrl);
 				}
-				targetUrl = longUrl[0].longUrl;
-
-				await redis.set(`url:${id}`, targetUrl);
+				db.update(shortUrls)
+					.set({ hits: sql`hits + 1` })
+					.where(eq(shortUrls.id, id))
+					.catch((err) => console.error("Failed to update hit count:", err));
+				return redirect(targetUrl, 301);
+			} catch (err) {
+				console.error("Error resolving short URL:", err);
+				set.status = 500;
+				return { error: "Internal server error" };
 			}
-			db.update(shortUrls)
-				.set({ hits: sql`hits + 1` })
-				.where(eq(shortUrls.id, id))
-				.catch((err) => console.error("Failed to update hit count:", err));
-			return redirect(targetUrl, 301);
 		},
 		{
 			params: t.Object({
@@ -123,11 +140,12 @@ const app = new Elysia()
 
 		return {
 			success: true,
-			deleted: (
-				await db
-					.delete(shortUrls)
-					.where(lt(shortUrls.createdAt, threeWeeksAgo()))
-			).rowsAffected,
+			deleted:
+				(
+					await db
+						.delete(shortUrls)
+						.where(lt(shortUrls.createdAt, threeWeeksAgo()))
+				).rowsAffected ?? 0,
 		};
 	});
 
