@@ -1,4 +1,4 @@
-# URL Shortener with Elysia
+# URL Shortener in Elysia
 
 ## Overview
 A high-performance RESTful URL shortener API built to explore modern backend tooling and architecture. It takes a long URL, generates a unique 8-character Base62 string, and redirects users while tracking hit counts.
