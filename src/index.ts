@@ -71,10 +71,10 @@ const app = new Elysia()
 			try {
 				const newShortUrl = await db
 					.insert(shortUrls)
-					.values({ id: await nanoid(), longUrl })
+					.values({ id: nanoid(), longUrl })
 					.returning();
 
-				await redis.set(`url:${newShortUrl[0].id}`, longUrl);
+				await redis.setex(`url:${newShortUrl[0].id}`, 86400, longUrl);
 
 				set.status = 201;
 				return newShortUrl[0];
