@@ -74,7 +74,7 @@ const app = new Elysia()
 					.values({ id: nanoid(), longUrl })
 					.returning();
 
-				await redis.setex(`url:${newShortUrl[0].id}`, 86400, longUrl);
+				await redis.set(`url:${newShortUrl[0].id}`, longUrl, "EX", 86400);
 
 				set.status = 201;
 				return newShortUrl[0];
