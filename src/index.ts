@@ -99,7 +99,7 @@ const app = new Elysia()
 			try {
 				let targetUrl: string | null = null;
 
-				const cachedUrl = await redis.get(`url:${id}`);
+				const cachedUrl = await redis.getex(`url:${id}`, 'EX', 86400);
 
 				if (cachedUrl) {
 					targetUrl = cachedUrl;
