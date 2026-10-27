@@ -114,7 +114,7 @@ const app = new Elysia()
 					}
 					targetUrl = longUrl[0].longUrl;
 
-					await redis.set(`url:${id}`, targetUrl);
+					await redis.set(`url:${id}`, targetUrl, 'EX', 86400);
 				}
 				db.update(shortUrls)
 					.set({ hits: sql`hits + 1` })
